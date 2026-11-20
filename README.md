@@ -105,14 +105,14 @@ represents one BDS instance.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `bds_type` | String | Yes | Type of the BDS service address. Supported values: `ipv4`, `ipv6`, and `domain`. |
-| `bds_host` | String | Yes | Hostname, IPv4 address, or IPv6 address of the BDS signaling service. Its format must match `bds_type`. Do not include a port. |
-| `bds_tcp` | Integer | Yes | TCP port of the BDS signaling service. Must be between `1` and `65535`. |
-| `listen_tcp` | Integer | Yes | TCP port on which NetherNet-Mux listens for player connections for this instance. Must be between `1` and `65535`. |
-| `listen_mux` | Integer | Yes | UDP port on which NetherNet-Mux listens for multiplexed game data for this instance. Must be between `1` and `65535`. |
-| `public_type` | String | Yes | Type of the external address used in the SDP candidate. Supported values: `ipv4`, `ipv6`, and `domain`. |
-| `public_host` | String | Yes | External address used in the SDP candidate. Its format must match `public_type`. Do not include a scheme or port. |
-| `public_port` | Integer | Yes | External port used in the SDP candidate. Must be between `1` and `65535`. |
+| `bds_type` | String | Yes | Address type for `bds_host`: `ipv4`, `ipv6`, or `domain`. |
+| `bds_host` | String | Yes | Hostname or IP address of the BDS signaling service. Its format must match `bds_type`; do not include a port. |
+| `bds_tcp` | Integer | Yes | TCP port of the BDS signaling service (`1`–`65535`). |
+| `listen_tcp` | Integer | Yes | TCP port where NetherNet-Mux listens for this instance's signaling requests (`1`–`65535`). |
+| `listen_mux` | Integer | Yes | UDP port where NetherNet-Mux listens for this instance's game data (`1`–`65535`). |
+| `public_type` | String | Yes | Address type for `public_host`: `ipv4`, `ipv6`, or `domain`. |
+| `public_host` | String | Yes | Public address advertised in the SDP answer. Its format must match `public_type`; do not include a scheme or port. |
+| `public_port` | Integer | Yes | Public UDP port advertised in the SDP answer (`1`–`65535`). |
 
 All port fields are JSON integers, not strings.
 
