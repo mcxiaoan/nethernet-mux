@@ -1,7 +1,12 @@
 mod config;
+mod mux;
+mod session;
+mod signaling;
+mod stun;
+use session::SessionTable;
 use std::error::Error;
 use std::net::SocketAddr;
-// use std::sync::Arc;
+use std::sync::Arc;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio::task::JoinHandle;
 
@@ -101,24 +106,26 @@ fn start_services(bound: Vec<(config::Config, TcpListener, UdpSocket)>) -> Runni
     let mut tasks: Vec<JoinHandle<()>> = Vec::with_capacity(bound.len() * 2);
     for (config, tcp, udp) in bound {
         // create an independent session table for each BDS instance.
-        // let sessions = Arc::new(SessionTable::default());
+        let sessions = Arc::new(SessionTable::default());
 
         // TCP and UDP services share this BDS instance's session table.
-        // let http_sessions = Arc::clone(&sessions);
+        let http_sessions = Arc::clone(&sessions);
 
         let http_config = config.clone();
 
         // start TCP signaling service.
         tasks.push(tokio::spawn(async move {
-            // if let Err(error) = signaling::serve(tcp, http_config, http_sessions).await {
-            //     eprintln!("TCP signaling service exited: {error}");
-            // }
+            if let Err(error) = signaling::serve(tcp, http_config, http_sessions).await {
+                eprintln!("TCP signaling service exited: {error}");
+            }
         }));
 
         // start UDP mux service.
-        // tasks.push(tokio::spawn(async move {
-        // mux::serve(udp, config, sessions).await;
-        // }));
+        tasks.push(tokio::spawn(async move {
+            if let Err(error) = mux::serve(udp, config, sessions).await {
+                eprintln!("UDP mux service exited: {error}");
+            }
+        }));
     }
     RunningServices { tasks }
 }

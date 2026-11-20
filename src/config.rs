@@ -57,7 +57,7 @@ pub fn initial_config() -> Result<Vec<Config>, Box<dyn Error>> {
             error
         )
     })?;
-    //determine if the config quantity is empty
+    // determine if the config quantity is empty
     if configs.is_empty() {
         return Err("config is empty".into());
     }
