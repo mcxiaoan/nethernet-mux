@@ -1,5 +1,18 @@
-
 # NetherNet-Mux
+
+> **Responsible use:** Do not use this project for any unlawful or
+> criminal activity. By accessing, downloading, or using this project,
+> you acknowledge that you have read and agree to comply with this
+> requirement. Unauthorized or malicious use of the proxy to route or
+> forward traffic to another party's server, or to cause economic or
+> other harm, is strictly prohibited and will not be tolerated. The
+> author and contributors accept no responsibility for unlawful or
+> malicious use of the project and reserve the right to seek legal
+> remedies where applicable. Any resulting losses and legal liabilities
+> are the responsibility of the party at fault, as determined under
+> applicable law.
+
+**Language:** English | [简体中文](README-CN.md)
 
 NetherNet-Mux is a configurable network proxy designed to manage
 connections for multiple Bedrock Dedicated Server (BDS) instances. It
@@ -7,7 +20,8 @@ uses a JSON configuration file, `nethernet-mux.json`, to define each BDS
 instance and the corresponding proxy listening endpoints.
 
 This document explains how to obtain NetherNet-Mux, build it from
-source, and configure `nethernet-mux.json`.
+source, configure `nethernet-mux.json`, and choose a deployment
+architecture.
 
 ## Features
 
@@ -50,11 +64,8 @@ Building from source requires a compatible Rust toolchain and Cargo.
 
 1. Install Rust and Cargo by following the instructions on the
    [official Rust website](https://www.rust-lang.org/tools/install).
-
 2. Clone or download the NetherNet-Mux source code.
-
 3. Open a terminal in the project directory.
-
 4. Build the optimized executable:
 
    ```bash
@@ -73,15 +84,9 @@ The exact executable filename depends on the operating system.
 
 ## Configuration
 
-NetherNet-Mux reads its configuration from:
-
-```text
-nethernet-mux.json
-```
-
-The file is located in the program's **current working directory**. Make
-sure you create or place the file in the directory from which you launch
-NetherNet-Mux.
+NetherNet-Mux reads its configuration from `nethernet-mux.json` in the
+program's **current working directory**. Make sure you create or place
+the file in the directory from which you launch NetherNet-Mux.
 
 ### First launch
 
@@ -92,11 +97,10 @@ empty JSON array:
 []
 ```
 
-The program then reports that the configuration is empty and asks you to
-configure the file. An empty file is also replaced with an empty JSON
-array and requires configuration.
-
-At least one BDS instance must be configured before startup can proceed.
+The program then reports that the configuration is empty and asks you
+to configure the file. An empty file is also replaced with an empty JSON
+array and requires configuration. At least one BDS instance must be
+configured before startup can proceed.
 
 ### Configuration structure
 
@@ -127,9 +131,8 @@ Both `bds_type` and `public_type` support the following values:
 | `domain` | The corresponding host field must contain a valid domain name. |
 
 `bds_type` determines how `bds_host` is validated, while
-`public_type` determines how `public_host` is validated.
-
-These two settings are independent and can have different values.
+`public_type` determines how `public_host` is validated. These two
+settings are independent and can have different values.
 
 ### Example: IPv4
 
@@ -215,22 +218,16 @@ must have its own `listen_tcp` and `listen_mux` ports.
 ]
 ```
 
-In this example:
+The first BDS instance uses TCP port `19301` and UDP port `19302` on the
+proxy. The second uses TCP port `19303` and UDP port `19304`. The
+example addresses use documentation-only IP ranges and domain names;
+replace them with addresses appropriate for your environment.
 
-- The first BDS instance uses TCP port `19301` and UDP port `19302` on
-  the proxy.
-- The second BDS instance uses TCP port `19303` and UDP port `19304`
-  on the proxy.
-- The two instances have different proxy listening ports.
-
-The example addresses use documentation-only IP ranges and domain names.
-Replace them with addresses appropriate for your environment.
-
-## Configuration validation
+### Configuration validation
 
 NetherNet-Mux checks the configuration before starting its services.
 
-### General validation
+#### General validation
 
 - The configuration must contain at least one BDS instance.
 - `bds_host` and `public_host` must match their declared address types.
@@ -241,7 +238,7 @@ NetherNet-Mux checks the configuration before starting its services.
 - TCP and UDP listening ports are also considered conflicting if their
   numeric port values are the same.
 
-### External address validation
+#### External address validation
 
 The value of `public_type` determines how `public_host` is validated:
 
@@ -295,32 +292,163 @@ service port does not use the same port number as any configured
 
 Otherwise, the BDS service and NetherNet-Mux may attempt to bind
 conflicting local ports, causing a startup or connectivity failure.
-
-This is a deployment consideration and is intentionally not enforced
-by the configuration validator.
+This is a deployment consideration and is intentionally not enforced by
+the configuration validator.
 
 When BDS instances run in separate Docker network namespaces, their
 internal service ports can generally be reused. Make sure that the
 configured `bds_host` and `bds_tcp` correctly identify and reach the
 intended BDS service.
 
+## Deployment options
+
+| Option | Purpose | Advantages | Limitations |
+|---|---|---|---|
+| Native BDS, no proxy | Players connect directly to BDS. | Simplest topology; no proxy process or extra network hop. | BDS signaling and every candidate address/port must be reachable by players. It does not solve private-address or NAT reachability problems. |
+| Native BDS with NetherNet-Mux | Run BDS and the proxy as native processes, on the same host or separate hosts. | The proxy advertises a reachable UDP endpoint and relays traffic to BDS; BDS can stay on a private network. | Adds a process and network hop. The proxy must reach BDS on all required ports, and the proxy's public TCP/UDP ports must be reachable by players. Same-host deployments must avoid listener port conflicts. |
+| Dockerized BDS with host NetherNet-Mux | Run BDS in a private Docker container and the proxy on the host. | Isolates BDS ports in the container's network namespace, so they do not occupy or conflict with host ports when using a private Docker network without host networking or publishing BDS ports. BDS ports also stay off the public Internet while remaining reachable by the proxy. This is the recommended option when the proxy can reach the container. | Docker networking must let the proxy reach all container ports. The container IP must be stable or the proxy configuration updated when it changes. Some Docker platforms do not provide direct host-to-container-IP access by default. The proxy's own `listen_tcp` and `listen_mux` ports must still be available on the host. |
+
+The diagrams below show the signaling path (TCP) separately from the
+game-data path (UDP). In the proxy diagrams, `listen_tcp` and
+`listen_mux` are the proxy's listening ports, while `public_host` and
+`public_port` are the endpoint advertised to players in the SDP answer.
+
+### 1. Native BDS without NetherNet-Mux
+
+In a direct deployment, the client connects to BDS for both signaling
+and game data. The BDS candidate address in its SDP answer must be
+reachable by the client. This arrangement does not provide address
+translation for a BDS behind NAT or on a private network.
+
+```mermaid
+flowchart LR
+    Client["Minecraft client"]
+    BDS["Native BDS"]
+    Client -->|"HTTP signaling (TCP)"| BDS
+    BDS -->|"SDP answer with BDS candidate"| Client
+    Client <-->|"Game data (UDP to BDS candidate)"| BDS
+```
+
+### 2. Native BDS with NetherNet-Mux
+
+Here BDS and NetherNet-Mux run as native processes. They may share a
+host or run on separate hosts, provided the proxy can reach BDS over
+TCP and UDP. Players connect only to the proxy's public endpoints. The
+proxy forwards signaling to BDS, registers the BDS UDP candidate, and
+rewrites the candidate in the answer. UDP game traffic then passes
+through the proxy.
+
+```mermaid
+flowchart LR
+    Client["Minecraft client"]
+    Proxy["NetherNet-Mux<br/>TCP: listen_tcp<br/>UDP: listen_mux"]
+    BDS["Native BDS<br/>TCP: bds_host:bds_tcp<br/>UDP: candidate port"]
+    Client -->|"HTTP signaling (TCP)"| Proxy
+    Proxy -->|"Forward signaling (TCP)"| BDS
+    BDS -->|"SDP answer with BDS candidate"| Proxy
+    Proxy -->|"SDP answer with public_host:public_port"| Client
+    Client <-->|"Game data (UDP via listen_mux)"| Proxy
+    Proxy <-->|"Relayed UDP to BDS candidate"| BDS
+```
+
+The firewall must allow players to reach the proxy's `listen_tcp` and
+`listen_mux` ports, and must allow the proxy to reach BDS's signaling
+port and candidate UDP port.
+
+### 3. Dockerized BDS with NetherNet-Mux on the host
+
+This is the recommended Docker arrangement: BDS runs in a private
+container network, while NetherNet-Mux runs on the host (or another
+node that can reach that network). The proxy uses the container's
+private address for `bds_host`; players never connect directly to the
+container.
+
+```mermaid
+flowchart LR
+    Client["Minecraft client"]
+    Proxy["Host: NetherNet-Mux<br/>TCP: listen_tcp<br/>UDP: listen_mux"]
+    subgraph Docker["Private Docker network"]
+        BDS["BDS container<br/>All ports open to local proxy"]
+    end
+    Client -->|"HTTP signaling (TCP)"| Proxy
+    Proxy -->|"Forward signaling (TCP) to container IP:bds_tcp"| BDS
+    BDS -->|"SDP answer with container candidate"| Proxy
+    Proxy -->|"SDP answer with public_host:public_port"| Client
+    Client <-->|"Game data (UDP via listen_mux)"| Proxy
+    Proxy <-->|"Relayed UDP to container candidate"| BDS
+```
+
+The host-run NetherNet-Mux program must be able to reach BDS through the
+container IP. BDS selects its UDP candidate port dynamically: the proxy
+cannot preconfigure that port, and BDS cannot determine whether the
+selected port is reachable from the proxy. Therefore, **all ports on
+the BDS container must be open to the local proxy program**. Keep this
+access on the private network; do not expose the BDS container's ports
+to the public Internet. Publish the proxy's `listen_tcp` and
+`listen_mux` ports for players. Docker's `EXPOSE` setting alone does
+not publish ports or configure firewall access.
+
 ### Recommended Docker setup
 
-Run BDS in a Docker container and let NetherNet-Mux reach it through the
-container's private IP address. Set `bds_host` to that address and
-`bds_tcp` to the BDS signaling port.
+The recommended arrangement uses one Docker container for BDS and runs
+NetherNet-Mux as a separate program on the host. BDS stays on a private
+Docker network; only the proxy's public endpoints need to accept player
+traffic.
 
-BDS chooses its UDP port dynamically and includes the selected address
-and port in the SDP answer. NetherNet-Mux reads that candidate and
-forwards UDP packets to it. Configure Docker so the proxy host can reach
-all TCP and UDP ports on the BDS container through its private IP; the
-UDP port does not need to be known in advance.
+1. Create a Docker container for BDS and place its data in persistent
+   storage. Attach it to a private network whose container IP the proxy
+   host can reach. Use container networking rather than host networking,
+   and do not publish BDS ports on the host; this keeps the container's
+   ports separate from host ports.
+2. Inside the container, download and install the official BDS files or
+   a compatible third-party distribution/loader such as LeviLamina, then
+   start BDS according to that distribution's instructions. A
+   third-party distribution may already provide NetherNet multiplexing;
+   check its documentation and compatibility before adding or relying
+   on another mux.
+3. If `server.properties` contains `server-udp-ports`, remove or comment
+   out that setting rather than pinning BDS to one UDP port. BDS should
+   be able to select the UDP candidate port used for a session.
+4. Configure `nethernet-mux.json` on the proxy host. Set `bds_host` to
+   the container's private IP and `bds_tcp` to BDS's signaling TCP port.
+   For example:
 
-The proxy connects to the BDS container IP. This opens all ports on the
-**container** to the proxy host, not all ports on the **host** to the
-Internet. Players connect to NetherNet-Mux's `listen_tcp` and
-`listen_mux` ports, while BDS remains on the private Docker network.
-Docker's `EXPOSE` setting alone does not make container ports reachable.
+   ```json
+   [
+     {
+       "bds_type": "ipv4",
+       "bds_host": "172.20.0.2",
+       "bds_tcp": 19132,
+       "listen_tcp": 19301,
+       "listen_mux": 19302,
+       "public_type": "ipv4",
+       "public_host": "203.0.113.10",
+       "public_port": 19302
+     }
+   ]
+   ```
+
+   Replace the example addresses and ports with the actual container
+   address, BDS port, proxy listener ports, and public endpoint. If a
+   firewall or NAT maps a different public UDP port to `listen_mux`,
+   set `public_port` to that external UDP port.
+5. Allow the local proxy program to access **all ports on the BDS
+   container** over the private Docker network. This is access to the
+   container from the proxy, not a requirement to publish all container
+   ports to the Internet. Docker's `EXPOSE` setting alone does not
+   publish ports or configure firewall access.
+6. Start BDS inside the container, then start NetherNet-Mux on the host.
+   Allow players to reach the proxy's `listen_tcp` and `listen_mux`
+   ports, including any required public-to-local port forwarding.
+
+BDS includes the selected UDP address and port in its SDP answer.
+NetherNet-Mux reads that candidate and forwards game traffic to the
+container, so the proxy does not need to know the dynamic UDP port
+before a player connects. If the container is recreated with a
+different IP, update `bds_host` in the proxy configuration. On Docker
+platforms where the host cannot directly reach a container IP, configure
+a private network path that gives the proxy access to the container's
+ports before starting the proxy.
 
 ## Running and stopping
 
@@ -356,10 +484,8 @@ for a hostname.
 
 Every `listen_tcp` and `listen_mux` value must be unique across all
 configured instances. Choose different port numbers for the conflicting
-entries.
-
-If a BDS instance is deployed locally, also check that its BDS service
-port does not conflict with any proxy listening port.
+entries. If BDS is deployed locally, also check that its service ports
+do not conflict with proxy listening ports.
 
 **The domain passes validation but does not connect**
 
@@ -370,4 +496,4 @@ reachability separately.
 ## License
 
 NetherNet-Mux is licensed under the MIT License. See the
-[LICENSE](LICENSE) file for the full license text.
+[`LICENSE`](LICENSE) file for the full license text.
