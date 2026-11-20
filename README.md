@@ -304,6 +304,24 @@ internal service ports can generally be reused. Make sure that the
 configured `bds_host` and `bds_tcp` correctly identify and reach the
 intended BDS service.
 
+### Recommended Docker setup
+
+Run BDS in a Docker container and let NetherNet-Mux reach it through the
+container's private IP address. Set `bds_host` to that address and
+`bds_tcp` to the BDS signaling port.
+
+BDS chooses its UDP port dynamically and includes the selected address
+and port in the SDP answer. NetherNet-Mux reads that candidate and
+forwards UDP packets to it. Configure Docker so the proxy host can reach
+all TCP and UDP ports on the BDS container through its private IP; the
+UDP port does not need to be known in advance.
+
+The proxy connects to the BDS container IP. This opens all ports on the
+**container** to the proxy host, not all ports on the **host** to the
+Internet. Players connect to NetherNet-Mux's `listen_tcp` and
+`listen_mux` ports, while BDS remains on the private Docker network.
+Docker's `EXPOSE` setting alone does not make container ports reachable.
+
 ## Running and stopping
 
 Start the executable from the directory containing `nethernet-mux.json`.
